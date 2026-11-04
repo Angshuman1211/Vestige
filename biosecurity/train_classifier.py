@@ -224,6 +224,11 @@ def make_figure(probs, labels, reconstructed_scores, history):
         "Biosecurity classifier — 1D CNN · pathogen virulence genes vs host sequences",
         fontsize=10, color="gray",
     )
+    fig.text(0.5, 1.04,
+             "Biosecurity clearance is not a soft negative-result line - every flag carries an explicit provenance trail.",
+             ha="center", va="bottom", fontsize=9.5,
+             bbox=dict(boxstyle="round,pad=0.4", facecolor="#eafaf1",
+                       edgecolor="#16a34a", linewidth=1.0, alpha=0.95))
     plt.tight_layout()
     OUT_FIG.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(str(OUT_FIG) + ".pdf", bbox_inches="tight")
