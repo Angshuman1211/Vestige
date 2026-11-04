@@ -62,3 +62,11 @@ Dataset/elephant_reference/ncbi_dataset.zip
 .env
 *.key
 Paper/
+
+# ─── Personal documents — never track (files kept on disk) ──────────────────
+LOR_*
+*_LOR_*
+
+# ─── Build / download artifacts — redundant with staged models, re-creatable ──
+*.zip
+vestige_checkpoints
