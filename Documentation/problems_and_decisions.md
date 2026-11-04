@@ -409,3 +409,47 @@ This reliably returns NM_*/XM_* mRNA records, from which the CDS feature is extr
 **Decision:** Skipped MC1R. The remaining four genes (TRPA1, UCP1, ADRB3, FASN) contributed 557 windows — sufficient for the validation expansion goal. A fallback description search could recover the locus but was not necessary given the total window count.
 
 **Impact:** None on results. 557 extra windows raised total to 626, giving p < 0.001 at all six T_END values.
+
+---
+
+## P24 — Multi-Seed Benchmark Overturns the Single-Seed "dam_power Wins" Story
+
+**Phase:** Resubmission (TCBB editorial reject — "insufficient depth", "needs more experimental comparison with existing methods")
+
+**Where it surfaced:** I retrained 5 masking arms (mlm, dam linear, dam_smooth, dam_power, pmdmask) on 3 seeds (42, 1, 2), all on Colab T4, then evaluated terminal C/G recovery and authentic-damage background recovery per seed. Code `evaluation/evaluate_multiseed.py`, weights `training/multiseed_models/<arm>-s<seed>/`, results `evaluation/results_multiseed.json` + `table_multiseed.txt`.
+
+**Problem:** The single-seed (seed 42) run told two stories I was about to build the resubmission on, and multi-seed broke one:
+- Seed 42 said linear DAM ≈ MLM on terminal (+0.016, p=0.438) but dam_power beat MLM (+0.061, p=0.012), implying the squared-frequency mapping was what "rescued" DAM.
+- Across 3 seeds this is false. Linear DAM, smoothed, and power give the SAME terminal gain within noise (mean over MLM: +0.040 / +0.043 / +0.047; MLM terminal 0.343; all three variants positive on all three seeds). The p=0.438-vs-0.012 gap existed only on seed 42. The "power map is special" claim was a single-seed fluctuation and is dropped.
+
+**What survived (confirmed on all 3 seeds):**
+- DAM beats MLM on terminal C/G recovery (every variant positive on every seed, ~+0.04). The paper's core claim holds once it does not rest on the one unlucky seed where linear DAM looked dead (that seed drove the TCBB-facing "weak result" worry).
+- DAM pays no background cost (dam variants vs MLM on background all ns: +0.008 / +0.022 / −0.027).
+- pmd-mask (hard threshold) collapses on background (−0.134 mean, negative all 3 seeds, p=0.004 on seed 42), confirming soft > hard damage-aware masking.
+
+**The awkward fact:** pmd-mask beats DAM on terminal by a wide margin (+0.164 vs +0.04, all p < 0.001). I cannot claim DAM is the best terminal reconstructor.
+
+**Decision:**
+- Report LINEAR DAM as the method (simplest, and it works). Present smoothed/power as an ablation showing the result is insensitive to the mapping shape — insensitivity is a robustness point, not a weakness. Remove every "power / freq² is special" claim.
+- Frame the contribution as a tradeoff, not a clean sweep: hard damage-thresholding (pmd-mask) over-specializes to the terminal zone (large terminal gain, background collapse); soft damage-aware masking (DAM) improves terminal over uniform MLM while preserving general infilling. DAM is the balanced reconstructor.
+
+**Pending:** Per-seed terminal significance is consistent in sign but marginal individually (DAM significant on 1–2 of 3 seeds, each seed only 69 windows). Next is a pooled across-seed test (seed-averaged per-window one-sample test, windows as the replication unit, plus a MixedLM confirmatory) to give one defensible p-value for the ~+0.04 terminal gain. See P25.
+
+---
+
+## P25 — The DAM Collator's "First Base" Test Is a DNABERT-2 Tokenization Accident (D2 blocker + fix)
+
+**Phase:** Depth study D2 (second backbone). See `Documentation/11_depth_study_plan.md`.
+
+**Where it surfaced:** Porting DAM to GENA-LM (the first second-backbone). The dataset built cleanly (275/69, identical windows, GENA-LM tokenized), but the DAM collator masked only ~0.6% of tokens vs MLM's 15% — an unfair budget that would rig the comparison against DAM.
+
+**Root cause:** `collator_dam.py` flags a token as damage-relevant by its FIRST character (`_build_base_lookup`). Diagnostic on the two tokenizers:
+- DNABERT-2: 73% of tokens are C/G-first (A-first only 1% — its BPE merges almost never start a token with A), so first-base tracks C/G content well.
+- GENA-LM: 4% of tokens are C/G-first (A-first 49%, T-first 47%), so first-base flags almost nothing.
+- BUT 96% of tokens in BOTH tokenizers CONTAIN a C or G. So "first base" is a DNABERT-2 accident; "contains C/G at a known position" is tokenizer-robust. A reviewer could already attack the original paper as "DAM only works because of a DNABERT-2 BPE quirk."
+
+**Fix (chosen — full offset-aware rebuild):** new `masking/collator_dam_offset.py` (`OffsetAwareDamageCollator`). Reconstructs each token's actual nucleotides and their ABSOLUTE window position from the token string (DNA BPE / k-mer tokens ARE their nucleotide content), then scores a token by the strongest damage among the C's it covers (by 5' distance, ct_5p) and G's it covers (by 3' distance, ga_3p), rescaled so damage-relevant tokens average 0.15. Tokenizer-agnostic (DNABERT-2 / GENA-LM / NT). This also upgrades the method from "accidental" to "nucleotide-level, principled," which directly rebuts the reviewers.
+
+**Pay-off test 1 (collator level, PASSED):** masking rate by nucleotide position, both backbones — fair overall budget (DNABERT-2 0.144, GENA-LM 0.146) AND a terminal gradient (5' nt[0:5] ≈ 0.21–0.25 decaying to ~0.14 interior) that is nearly identical across the two tokenizers. GENA-LM's 0.6% failure is fixed; the DAM signature ports.
+
+**Decision / next:** collator mechanism ports (necessary condition met). Before the full investment (multi-seed both backbones + re-verifying/retraining DNABERT-2 DAM with the offset-aware collator so all backbones use the same method), run Pay-off test 2: a short single-seed GENA-LM train (MLM vs DAM-offset) + terminal eval. Proceed to full rollout only if DAM shows a terminal edge there. The original first-base `collator_dam.py` is kept (reproduces the published DNABERT-2 numbers); the offset-aware one becomes the method going forward.
