@@ -1,0 +1,57 @@
+
+Multi-seed benchmark (MPS, seeds 42/1/2) — all vs MLM baseline
+==============================================================================
+present: mlm-s42, mlm-s1, mlm-s2, dam-s42, dam-s1, dam-s2, dam_smooth-s42, dam_smooth-s1, dam_smooth-s2, pmdmask-s42, pmdmask-s1, pmdmask-s2, dam_power-s42, dam_power-s1, dam_power-s2
+------------------------------------------------------------------------------
+
+Terminal C/G recovery (mean over windows):
+  arm                     s42       s1       s2     mean      sd
+  MLM (uniform 15%)    0.3474   0.3297   0.3529   0.3433  0.0099
+  DAM (linear)         0.3633   0.3927   0.3944   0.3835  0.0143
+  DAM, smoothed        0.3922   0.3862   0.3792   0.3859  0.0053
+  pmd-mask (hard)      0.4994   0.5110   0.5111   0.5072  0.0055
+  DAM, power map       0.4084   0.3838   0.3778   0.3900  0.0133
+
+Terminal: arm - MLM per seed (mean_diff, p), then across-seed aggregate:
+  DAM (linear)       s42 +0.0159 (p=0.438) | s1 +0.0631 (p=0.0115) | s2 +0.0415 (p=0.0941)
+                     -> mean +0.0401, range [+0.0159,+0.0631], all_positive=True
+  DAM, smoothed      s42 +0.0448 (p=0.0604) | s1 +0.0565 (p=0.0246) | s2 +0.0263 (p=0.194)
+                     -> mean +0.0425, range [+0.0263,+0.0565], all_positive=True
+  pmd-mask (hard)    s42 +0.1520 (p=0.000385) | s1 +0.1814 (p=4.48e-05) | s2 +0.1582 (p=6.42e-05)
+                     -> mean +0.1638, range [+0.1520,+0.1814], all_positive=True
+  DAM, power map     s42 +0.0610 (p=0.0123) | s1 +0.0541 (p=0.0126) | s2 +0.0248 (p=0.276)
+                     -> mean +0.0467, range [+0.0248,+0.0610], all_positive=True
+
+Background (authentic-damage) recovery (mean over windows):
+  arm                     s42       s1       s2     mean      sd
+  MLM (uniform 15%)    0.6764   0.6492   0.6725   0.6660  0.0120
+  DAM (linear)         0.6221   0.6453   0.6512   0.6395  0.0126
+  DAM, smoothed        0.7074   0.7093   0.6473   0.6880  0.0288
+  pmd-mask (hard)      0.4767   0.5795   0.5407   0.5323  0.0424
+  DAM, power map       0.6705   0.7171   0.6357   0.6744  0.0333
+
+Background: arm - MLM per seed (mean_diff, p), then across-seed aggregate:
+  DAM (linear)       s42 -0.0543 (p=0.267) | s1 -0.0039 (p=0.94) | s2 -0.0213 (p=0.643)
+                     -> mean -0.0265, range [-0.0543,-0.0039], all_positive=False
+  DAM, smoothed      s42 +0.0310 (p=0.517) | s1 +0.0601 (p=0.246) | s2 -0.0252 (p=0.631)
+                     -> mean +0.0220, range [-0.0252,+0.0601], all_positive=False
+  pmd-mask (hard)    s42 -0.1996 (p=0.0042) | s1 -0.0698 (p=0.26) | s2 -0.1318 (p=0.0612)
+                     -> mean -0.1337, range [-0.1996,-0.0698], all_positive=False
+  DAM, power map     s42 -0.0058 (p=0.908) | s1 +0.0678 (p=0.146) | s2 -0.0368 (p=0.47)
+                     -> mean +0.0084, range [-0.0368,+0.0678], all_positive=False
+
+POOLED across-seed test (seed-averaged per-window diff, windows = unit):
+  Terminal (arm - MLM):
+    DAM (linear)       mean +0.0401 | t p=0.049 | wilcoxon p=0.0315 | mixedLM p=NA | CI[+0.0039,+0.0801] | n=69
+    DAM, smoothed      mean +0.0425 | t p=0.0341 | wilcoxon p=0.0157 | mixedLM p=NA | CI[+0.0070,+0.0820] | n=69
+    pmd-mask (hard)    mean +0.1638 | t p=3.73e-05 | wilcoxon p=3.6e-05 | mixedLM p=NA | CI[+0.0931,+0.2379] | n=69
+    DAM, power map     mean +0.0467 | t p=0.0153 | wilcoxon p=0.0118 | mixedLM p=NA | CI[+0.0124,+0.0839] | n=69
+  Background (arm - MLM):
+    DAM (linear)       mean -0.0265 | t p=0.486 | wilcoxon p=0.486 | mixedLM p=NA | CI[-0.1034,+0.0439] | n=43
+    DAM, smoothed      mean +0.0220 | t p=0.609 | wilcoxon p=0.637 | mixedLM p=NA | CI[-0.0607,+0.1034] | n=43
+    pmd-mask (hard)    mean -0.1337 | t p=0.0246 | wilcoxon p=0.0282 | mixedLM p=NA | CI[-0.2448,-0.0245] | n=43
+    DAM, power map     mean +0.0084 | t p=0.82 | wilcoxon p=0.935 | mixedLM p=NA | CI[-0.0607,+0.0814] | n=43
+==============================================================================
+Read (robust across 3 seeds): all soft DAM variants beat MLM on terminal by ~+0.04
+and are equivalent to each other (power is NOT special); DAM holds background;
+pmd-mask wins terminal big but collapses on background (soft > hard tradeoff).

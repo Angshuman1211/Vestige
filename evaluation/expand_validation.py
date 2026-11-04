@@ -30,11 +30,11 @@ import importlib.machinery
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-if importlib.util.find_spec("triton") is None:
-    _stub = types.ModuleType("triton")
-    _stub.__spec__ = importlib.machinery.ModuleSpec("triton", loader=None)
-    _stub.__version__ = "0.0.0"
-    sys.modules["triton"] = _stub
+# triton stub removed: it broke transformers 4.57 import; DNABERT-2 falls back to torch attention.
+
+import os  # force torch-only: transformers TF backend breaks with Keras 3 (requirements.txt)
+os.environ.setdefault("USE_TF", "0")
+os.environ.setdefault("USE_FLAX", "0")
 
 import numpy as np
 from pathlib import Path

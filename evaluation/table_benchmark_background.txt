@@ -1,0 +1,17 @@
+
+Background (authentic-damage) reconstruction benchmark
+==========================================================================
+Arm                       Recov      SD   BLEU-4    Wins   DAM-arm        p
+--------------------------------------------------------------------------
+Masking strategies:
+  MLM (uniform 15%)        0.6764  0.3922    99.85      43   -0.0543    0.267
+  SpanBERT                 0.4419  0.4312    99.78      43   +0.1802  0.00244
+  pmd-mask (hard)          0.4767  0.4076    99.81      43   +0.1453   0.0348
+  DAM (proposed)           0.6221  0.3839    99.84      43       ref         
+DAM design ablations:
+  DAM, no rescale          0.3527  0.3957    99.75      43   +0.2694 0.000394
+  DAM, A/T baseline        0.4709  0.4160    99.83      43   +0.1512   0.0195
+  DAM, smoothed            0.7074  0.3610    99.84      43   -0.0853   0.0244
+  DAM, power map           0.6705  0.3863    99.84      43   -0.0484   0.0534
+==========================================================================
+DAM-arm > 0 and p < 0.05 means DAM recovers authentic damage better than that arm.
