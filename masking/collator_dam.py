@@ -27,6 +27,16 @@ import torch
 from transformers import DataCollatorForLanguageModeling
 
 
+def _moving_avg(x: np.ndarray, window: int) -> np.ndarray:
+    """Centred moving average, edge-padded to preserve length (D1 smooth ablation)."""
+    if window <= 1:
+        return x
+    pad = window // 2
+    xp = np.pad(x, pad, mode="edge")
+    kernel = np.ones(window) / window
+    return np.convolve(xp, kernel, mode="valid")[: len(x)]
+
+
 class DamageAwareDataCollator(DataCollatorForLanguageModeling):
     """
     Args:
@@ -43,6 +53,8 @@ class DamageAwareDataCollator(DataCollatorForLanguageModeling):
         damage_profile_path: str | Path,
         baseline_prob: float = 0.03,
         scale_to: float | None = 0.15,
+        smooth: int = 0,
+        power: float = 1.0,
         **kwargs,
     ):
         kwargs.setdefault("mlm", True)
@@ -51,10 +63,23 @@ class DamageAwareDataCollator(DataCollatorForLanguageModeling):
 
         profile = np.load(damage_profile_path, allow_pickle=True).item()
         # Indices are 0-based: ct_5p[0] = C→T rate at position 1 from 5′ end
-        self.ct_5p = torch.tensor(profile["ct_5p"], dtype=torch.float32)
-        self.ga_3p = torch.tensor(profile["ga_3p"], dtype=torch.float32)
+        ct = np.asarray(profile["ct_5p"], dtype=np.float64)
+        ga = np.asarray(profile["ga_3p"], dtype=np.float64)
+        # D1 ablation knobs (defaults = identity, so standard DAM is unchanged):
+        #   smooth > 1 : centred moving average over the profile (raw vs smoothed)
+        #   power != 1 : prob proportional to freq**power before rescale (mapping shape)
+        if smooth and smooth > 1:
+            ct = _moving_avg(ct, smooth)
+            ga = _moving_avg(ga, smooth)
+        if power != 1.0:
+            ct = np.power(ct, power)
+            ga = np.power(ga, power)
+        self.ct_5p = torch.tensor(ct, dtype=torch.float32)
+        self.ga_3p = torch.tensor(ga, dtype=torch.float32)
         self.baseline_prob = baseline_prob
         self.scale_to = scale_to
+        self.smooth = smooth
+        self.power = power
 
         # Precompute vocab-size lookup: token_id → {0:other, 1:A, 2:C, 3:G, 4:T}
         self._base_lookup: torch.Tensor = self._build_base_lookup()
