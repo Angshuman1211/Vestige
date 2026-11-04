@@ -92,6 +92,13 @@ def make_fig3(all_results, n_genes):
         "*** p < 0.001 (paired t-test, two-sided)",
         fontsize=9, color="gray", y=1.01,
     )
+    ax1.set_ylim(top=0.40)  # headroom for the callout above the DAM line
+    ax1.text(0.5, 0.97,
+             "Gap largest at T_END = 3; it narrows as wider zones mix in\n"
+             "background C/G positions where DAM and MLM perform alike.",
+             transform=ax1.transAxes, ha="center", va="top", fontsize=8.5,
+             bbox=dict(boxstyle="round,pad=0.4", facecolor="#eafaf1",
+                       edgecolor="#16a34a", linewidth=1.0, alpha=0.95))
     plt.tight_layout()
     out = OUT_DIR / "fig3_damage_scaling"
     fig.savefig(str(out) + ".pdf", bbox_inches="tight")
@@ -146,6 +153,12 @@ def make_fig3b(r3):
         "  7 genes (TRPV3, KCNK9, HBB, TRPA1, UCP1, ADRB3, FASN)",
         fontsize=8, color="gray", y=0.01,
     )
+    ax.text(0.03, 0.97,
+            "MLM < Random: standard MLM produces a worse-than-\n"
+            "random model at the very positions that matter most.",
+            transform=ax.transAxes, ha="left", va="top", fontsize=9,
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="#fdecea",
+                      edgecolor="#dc2626", linewidth=1.0, alpha=0.95))
     plt.tight_layout()
     out = OUT_DIR / "fig3b_headline"
     fig.savefig(str(out) + ".pdf", bbox_inches="tight")

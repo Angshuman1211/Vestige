@@ -64,6 +64,19 @@ for ax, title, xlabel in [
     ax.spines["right"].set_visible(False)
     ax.legend(fontsize=9, frameon=False)
 
+ax2.legend(fontsize=9, frameon=False, loc="lower left")  # move legend clear of the callout
+
+# Callout (verified from trainer_state.json: DAM leads at every epoch; gap grows to ~epoch 8 then holds)
+ax2.text(
+    0.97, 0.94,
+    "DAM's validation loss is lower at every epoch;\n"
+    "the advantage widens as the empirical prior\n"
+    "gains signal, then holds steady.",
+    transform=ax2.transAxes, ha="right", va="top", fontsize=8,
+    bbox=dict(boxstyle="round,pad=0.4", facecolor="#fdf2e9",
+              edgecolor="#c0392b", linewidth=1.0, alpha=0.95),
+)
+
 fig.suptitle(
     "DNABERT-2 fine-tuning · TRPV3 / KCNK9 / HBB · Elephas maximus reference",
     fontsize=9, color="gray", y=1.01,
