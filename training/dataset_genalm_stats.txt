@@ -1,0 +1,13 @@
+Gene       CDS bp  Windows Filtered     Kept
+----------------------------------------------
+TRPV3      46,944      226        0      226
+KCNK9      21,014       97        0       97
+HBB         5,821       21        0       21
+----------------------------------------------
+TOTAL                                    344
+
+Train windows : 275
+Val   windows : 69
+Window bp     : 2000
+Stride bp     : 200
+Max tokens    : 512

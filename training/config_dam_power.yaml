@@ -1,0 +1,27 @@
+run_name: dam-power2
+collator: dam
+
+power: 2.0           # D1: sharpened (freq^2) mapping
+
+model_name: zhihan1996/DNABERT-2-117M
+dataset_path: training/dataset
+output_dir: training/checkpoints/dam-power2
+
+num_train_epochs: 20
+per_device_train_batch_size: 8
+per_device_eval_batch_size: 8
+learning_rate: 2.0e-5
+warmup_ratio: 0.1
+weight_decay: 0.01
+lr_scheduler_type: cosine
+
+eval_strategy: epoch
+save_strategy: epoch
+save_total_limit: 3
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+
+seed: 42
+dataloader_num_workers: 0
+logging_steps: 10
+report_to: none

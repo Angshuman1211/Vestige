@@ -28,6 +28,7 @@ Outputs:
     training/dataset_stats.txt summary table
 """
 import csv
+import os
 import random
 from pathlib import Path
 
@@ -37,11 +38,13 @@ from datasets import Dataset, DatasetDict
 from transformers import AutoTokenizer
 
 # ── Config ────────────────────────────────────────────────────────────────────
+# Tokenizer + output are env-configurable for the D2 second-backbone study
+# (VESTIGE_MODEL / VESTIGE_OUT); defaults reproduce the original DNABERT-2 build.
 GENE_COORDS   = Path("damage/gene_coords.csv")
 REFERENCE_FA  = Path("Dataset/elephant_reference/elephant_ref.fa")
-MODEL_NAME    = "zhihan1996/DNABERT-2-117M"
-OUT_DIR       = Path("training/dataset")
-STATS_FILE    = Path("training/dataset_stats.txt")
+MODEL_NAME    = os.environ.get("VESTIGE_MODEL", "zhihan1996/DNABERT-2-117M")
+OUT_DIR       = Path(os.environ.get("VESTIGE_OUT", "training/dataset"))
+STATS_FILE    = OUT_DIR.parent / f"{OUT_DIR.name}_stats.txt"
 
 WINDOW_BP     = 2000
 STRIDE_BP     = 200
