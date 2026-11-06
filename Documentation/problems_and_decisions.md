@@ -453,3 +453,47 @@ This reliably returns NM_*/XM_* mRNA records, from which the CDS feature is extr
 **Pay-off test 1 (collator level, PASSED):** masking rate by nucleotide position, both backbones — fair overall budget (DNABERT-2 0.144, GENA-LM 0.146) AND a terminal gradient (5' nt[0:5] ≈ 0.21–0.25 decaying to ~0.14 interior) that is nearly identical across the two tokenizers. GENA-LM's 0.6% failure is fixed; the DAM signature ports.
 
 **Decision / next:** collator mechanism ports (necessary condition met). Before the full investment (multi-seed both backbones + re-verifying/retraining DNABERT-2 DAM with the offset-aware collator so all backbones use the same method), run Pay-off test 2: a short single-seed GENA-LM train (MLM vs DAM-offset) + terminal eval. Proceed to full rollout only if DAM shows a terminal edge there. The original first-base `collator_dam.py` is kept (reproduces the published DNABERT-2 numbers); the offset-aware one becomes the method going forward.
+
+---
+
+## P26 — GENA-LM Loaded With the WRONG Architecture (Test-2 first result was INVALID)
+
+**Phase:** Depth study D2, Pay-off test 2 (GENA-LM).
+
+**Where it surfaced:** First GENA-LM Test-2 eval returned DAM −0.01 vs MLM (a weak negative), with abnormally low recovery (~0.19 vs DNABERT-2's ~0.34). The HuggingFace load printed: checkpoint weights `pre_attention_ln` / `post_attention_ln` "were not used", and `attention.output.LayerNorm` / `output.LayerNorm` "newly initialized".
+
+**Root cause:** GENA-LM (`AIRI-Institute/gena-lm-bert-base-t2t`) is a **pre-LayerNorm** BERT, and its `auto_map` maps only `AutoModel -> modeling_bert.BertForMaskedLM` — there is NO `AutoModelForMaskedLM` entry. So `AutoModelForMaskedLM.from_pretrained(..., trust_remote_code=True)` silently fell back to transformers' standard **post-LN** `BertForMaskedLM`, dropping GENA-LM's real LayerNorm weights and randomly initialising the wrong ones. This happened at BOTH training (Colab) and eval → the models were fine-tuned from a mangled architecture. The −0.01 is a loading bug, NOT "DAM fails on GENA-LM." DO NOT report that number.
+
+**Fix (verified):** load GENA-LM via `AutoModel.from_pretrained(..., trust_remote_code=True)` (its custom class IS a masked LM with a 32000-vocab head). Clean load (no mismatched/newly-init weights), forward loss 6.3 vs the broken 32.4, trainable end-to-end. Implemented as a config-selectable loader in `train.py` (`model_class: AutoModel`, default `AutoModelForMaskedLM`); added to both GENA-LM configs; `evaluate_genalm_terminal.py` uses `AutoModel`. The invalid Colab models (mlm-genalm-s42, dam-offset-genalm-s42 in Drive + locally staged) are discarded.
+
+**Lesson:** when porting to a new backbone, CHECK the load log for "newly initialized" / "not used" weights and sanity-check the initial loss (~ln(vocab)); a wrong model can still train and silently produce a plausible-looking (wrong) number. **Next:** retrain GENA-LM MLM vs DAM-offset with the corrected loader, re-run the terminal eval, THEN decide the full rollout.
+
+---
+
+## P27 — Pay-off Test 2 PASSED: Offset-Aware DAM Beats MLM on GENA-LM (full rebuild justified)
+
+**Phase:** Depth study D2, Pay-off test 2 (GENA-LM), with the P26 loader fix.
+
+**Setup:** GENA-LM (`gena-lm-bert-base-t2t`, pre-LN, loaded via `AutoModel`) fine-tuned twice from identical hyperparameters, seed 42, 20 epochs — the ONLY difference is the collator (uniform MLM vs `OffsetAwareDamageCollator`). Final eval_loss near-identical (MLM 5.795, DAM 5.786), i.e. equal overall masked-LM fit. Terminal recovery eval re-tokenizes each of the 626 eval windows with GENA-LM's BPE, masks the token covering each terminal C (5' side) / G (3' side), predicts, scores the base at the right sub-offset. `evaluation/evaluate_genalm_terminal.py` → `evaluation/results_genalm_terminal.json`.
+
+**Result (DAM-offset − MLM, paired t-test + 10k-bootstrap CI):**
+- terminal 3 nt: MLM 0.163 → DAM 0.264, Δ **+0.101**, p=1.6e-13, CI [+0.075, +0.127], n=486
+- terminal 5 nt: MLM 0.172 → DAM 0.252, Δ **+0.080**, p=6.1e-17, CI [+0.062, +0.098], n=565
+- terminal 10 nt: MLM 0.202 → DAM 0.241, Δ **+0.039**, p=8.2e-13, CI [+0.029, +0.050], n=619
+
+**Reading:** on a different lab's model with a completely different (BPE) tokenizer, the offset-aware DAM improves terminal reconstruction over uniform MLM, and the edge is LARGEST at the most-damaged extreme (terminal 3 nt, +0.10) and decays inward (10 nt, +0.04) — the damage-awareness signature, not a flat offset. Equal overall eval_loss means the terminal gain is not bought by sacrificing general infilling. This is the architecture-independence evidence the TCBB reject demanded: DAM is not a DNABERT-2/BPE-quirk artifact (recall P25 — the OLD first-base collator masked only 0.6% on GENA-LM; the offset-aware rebuild both fixes that AND makes the method nucleotide-principled). The $0.30/hr full rebuild is justified.
+
+**Caveats to carry into the full rollout (do not overclaim yet):**
+- Single seed (42). The dam_power lesson (P24) says single-seed can mislead — the full GENA-LM arm must be multi-seed (42/1/2) before this goes in the paper.
+- Terminal-only metric. Must still measure GENA-LM BACKGROUND / non-terminal NRR to confirm DAM doesn't collapse there (the pmd-mask failure mode, P24).
+- GENA-LM numbers are backbone-specific, not comparable to DNABERT-2 absolute values.
+
+**Decision / next (full rollout, gate cleared):** (1) multi-seed GENA-LM MLM vs DAM-offset (seeds 1, 2) + background NRR; (2) re-verify/retrain DNABERT-2 DAM with the offset-aware collator so every backbone shares one principled method; (3) Nucleotide Transformer as the third backbone; (4) D3 domains. See `Documentation/11_depth_study_plan.md`.
+
+**Background check (same seed-42 models, `evaluation/evaluate_genalm_background.py`, central band = the interior where PMD damage is at baseline):** Δ(DAM−MLM) = +0.009 / +0.010 / +0.011 at a 3/5/10 nt central band (p = 0.13 / 0.024 / 0.0006). DAM does NOT sacrifice interior recovery — it is flat-to-slightly-positive on background. Contrast pmd-mask's −0.134 background collapse (P24). So on GENA-LM the full picture is: DAM improves C/G reconstruction EVERYWHERE, largest at the damaged terminal (+0.10) and small-but-non-negative in the interior (+0.01) — cleanly the "balanced reconstructor" claim, with zero background cost. (Mechanism: DAM concentrates its 15% budget on C/G-containing tokens globally, elevated further at the ends; MLM spreads budget over A/T tokens too. The eval scores C/G recovery only — the damage-repair-relevant metric; A/T recovery under DAM is not measured and is expected to be ~MLM-or-below, which is immaterial to deamination repair.) One caveat removed: the pmd-mask collapse mode does not occur. Remaining caveat: multi-seed (42/1/2) still owed before the paper.
+
+**MULTI-SEED CONFIRMED (2026-11-06, seeds 42/1/2, `evaluation/evaluate_genalm_multiseed.py` → `results_genalm_multiseed.json`).** Pooled = seed-averaged per-window Δ, one-sample t + Wilcoxon + 10k-bootstrap CI (windows = replication unit, same pooling as the DNABERT-2 multi-seed benchmark). All six models verified `pre_layer_norm=True`, eval_loss 5.79–5.85, MLM≈DAM per seed.
+- **TERMINAL** (DAM−MLM), pooled Δ / p_t / CI: 3 nt **+0.110**, 2.2e-17, [+0.086,+0.135]; 5 nt **+0.087**, 3.9e-21, [+0.070,+0.104]; 10 nt **+0.048**, 1.3e-18, [+0.038,+0.059]. Per-seed signs all positive and tight (e.g. 3 nt: +0.101/+0.110/+0.120).
+- **BACKGROUND** (central band), pooled Δ / p_t: 3 nt **+0.015** (5.8e-4); 5 nt **+0.015** (7.3e-5); 10 nt **+0.014** (8.7e-9). All positive, all seeds same sign. With 3 seeds the interior effect is now significant everywhere (single-seed s42 had the 3 nt band at p=0.13) — DAM slightly IMPROVES background C/G recovery, ~7× smaller than the terminal gain. The damage-gradient signature (large at the ends, small in the interior) holds. No collapse.
+
+**GENA-LM is CLOSED as a paper-ready second-backbone result:** terminal win + no background cost + multi-seed, on a different lab's model with a different tokenizer, using the nucleotide-principled offset-aware collator. This is the architecture-independence evidence the TCBB reject demanded. Remaining D2 work: re-verify/retrain DNABERT-2 DAM under the SAME offset-aware collator (so both backbones share one method), then Nucleotide Transformer as the third backbone.
