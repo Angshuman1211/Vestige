@@ -37,6 +37,7 @@ import importlib.util, importlib.machinery
 import torch
 from datasets import load_from_disk
 from transformers import (
+    AutoModel,
     AutoModelForMaskedLM,
     AutoTokenizer,
     Trainer,
@@ -129,7 +130,13 @@ def main():
 
     # Tokenizer + model
     tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"], trust_remote_code=True)
-    model = AutoModelForMaskedLM.from_pretrained(cfg["model_name"], trust_remote_code=True)
+    # Model loader is config-selectable. Most DNA LMs expose their masked-LM head via
+    # AutoModelForMaskedLM (default). GENA-LM is the exception: its auto_map maps only
+    # AutoModel -> modeling_bert.BertForMaskedLM (a pre-LayerNorm masked LM), so loading
+    # it with AutoModelForMaskedLM silently falls back to the standard post-LN BERT and
+    # randomly re-initialises half its LayerNorms. For GENA-LM set model_class: AutoModel.
+    _model_cls = AutoModel if cfg.get("model_class") == "AutoModel" else AutoModelForMaskedLM
+    model = _model_cls.from_pretrained(cfg["model_name"], trust_remote_code=True)
 
     # Memory-safe path for small-RAM machines (16 GB Macs on MPS, where GPU memory
     # IS system RAM): gradient checkpointing trades compute for a large cut in

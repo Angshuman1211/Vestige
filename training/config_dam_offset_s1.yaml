@@ -1,0 +1,34 @@
+run_name: dam-offset-s1
+collator: dam_offset
+
+model_name: zhihan1996/DNABERT-2-117M
+dataset_path: training/dataset
+output_dir: training/checkpoints/dam-offset-s1
+
+# D2 "one method across backbones": retrain DNABERT-2 DAM with the SAME
+# offset-aware collator used on GENA-LM, so both backbones share one principled
+# method (not first-base on DNABERT-2, offset-aware on GENA-LM). MLM arm is
+# reused from the existing multiseed_models/mlm-baseline-s* (collator-invariant).
+num_train_epochs: 20
+per_device_train_batch_size: 8
+per_device_eval_batch_size: 8
+learning_rate: 2.0e-5
+warmup_ratio: 0.1
+weight_decay: 0.01
+lr_scheduler_type: cosine
+
+eval_strategy: epoch
+save_strategy: epoch
+save_total_limit: 1
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+
+# offset-aware DAM: linear mapping, 0.15 rescale (same knobs as GENA-LM)
+scale_to: 0.15
+power: 1.0
+smooth: 0
+
+seed: 1
+dataloader_num_workers: 0
+logging_steps: 10
+report_to: none

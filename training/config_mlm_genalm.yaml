@@ -2,6 +2,7 @@ run_name: mlm-genalm-s42
 collator: mlm
 
 model_name: AIRI-Institute/gena-lm-bert-base-t2t
+model_class: AutoModel          # GENA-LM maps its pre-LN MaskedLM to AutoModel only
 dataset_path: training/dataset_genalm
 output_dir: training/checkpoints/mlm-genalm-s42
 

@@ -2,6 +2,7 @@ run_name: dam-offset-genalm-s42
 collator: dam_offset
 
 model_name: AIRI-Institute/gena-lm-bert-base-t2t
+model_class: AutoModel          # GENA-LM maps its pre-LN MaskedLM to AutoModel only
 dataset_path: training/dataset_genalm
 output_dir: training/checkpoints/dam-offset-genalm-s42
 
