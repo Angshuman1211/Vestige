@@ -12,13 +12,15 @@
   <a href="https://wandb.ai/angshumanchakravertty-svkm-s-narsee-monjee-institute-of-/vestige/runs/cz45npj4"><img src="https://img.shields.io/badge/W%26B-Experiment_Tracking-FFBE00?logo=weightsandbiases&logoColor=black" /></a>
   <img src="https://img.shields.io/badge/License-MIT-22c55e" />
   <img src="https://img.shields.io/badge/Status-Manuscript_Prep-f97316" />
-  <a href="https://github.com/Ganglet/Vestige/pkgs/container/vestige"><img src="https://img.shields.io/badge/ghcr.io-vestige%3Aresults-0ea5e9?logo=docker&logoColor=white" /></a>
+  <a href="https://github.com/angshuman1211/Vestige/pkgs/container/vestige"><img src="https://img.shields.io/badge/ghcr.io-vestige%3Aresults-0ea5e9?logo=docker&logoColor=white" /></a>
+  <a href="https://arxiv.org/abs/2607.27712"><img src="https://img.shields.io/badge/arXiv-2607.27712-b31b1b?logo=arxiv&logoColor=white" /></a>
 </p>
 
 <h1 align="center">VESTIGE</h1>
 <p align="center"><b>Variant-aware Estimation of Sequences Through In silico Genomic Emulation</b></p>
 <p align="center"><i>Damage-Aware Ancient DNA Infilling with Protein Stability Validation</i></p>
 <p align="center">Angshuman Chakravertty · B.Tech CSE (Data Science), NMIMS Hyderabad</p>
+<p align="center"><a href="https://arxiv.org/abs/2607.27712"><b>📄 Paper (arXiv:2607.27712)</b></a></p>
 
 ---
 
@@ -248,16 +250,16 @@ VESTIGE/
 **Reproduce all figures** (no data download, no GPU needed — runs from pre-computed outputs):
 
 ```bash
-docker pull ghcr.io/ganglet/vestige:latest-results
-docker run --rm -v $(pwd)/figures:/vestige/results/figures ghcr.io/ganglet/vestige:latest-results
+docker pull ghcr.io/angshuman1211/vestige:latest-results
+docker run --rm -v $(pwd)/figures:/vestige/results/figures ghcr.io/angshuman1211/vestige:latest-results
 # → figures/ now contains all PDF + PNG outputs
 ```
 
 **Full pipeline** (requires SRA data + ~11h training on GPU/M-series):
 
 ```bash
-docker pull ghcr.io/ganglet/vestige:latest-full
-docker run --rm -it -v $(pwd)/Dataset:/vestige/Dataset ghcr.io/ganglet/vestige:latest-full
+docker pull ghcr.io/angshuman1211/vestige:latest-full
+docker run --rm -it -v $(pwd)/Dataset:/vestige/Dataset ghcr.io/angshuman1211/vestige:latest-full
 # inside container: follow steps in Reproduce → bash commands below
 ```
 
