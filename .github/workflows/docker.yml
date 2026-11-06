@@ -7,7 +7,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  OWNER: ganglet
+  OWNER: angshuman1211
 
 jobs:
   results:
