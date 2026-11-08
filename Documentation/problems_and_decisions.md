@@ -497,3 +497,80 @@ This reliably returns NM_*/XM_* mRNA records, from which the CDS feature is extr
 - **BACKGROUND** (central band), pooled Δ / p_t: 3 nt **+0.015** (5.8e-4); 5 nt **+0.015** (7.3e-5); 10 nt **+0.014** (8.7e-9). All positive, all seeds same sign. With 3 seeds the interior effect is now significant everywhere (single-seed s42 had the 3 nt band at p=0.13) — DAM slightly IMPROVES background C/G recovery, ~7× smaller than the terminal gain. The damage-gradient signature (large at the ends, small in the interior) holds. No collapse.
 
 **GENA-LM is CLOSED as a paper-ready second-backbone result:** terminal win + no background cost + multi-seed, on a different lab's model with a different tokenizer, using the nucleotide-principled offset-aware collator. This is the architecture-independence evidence the TCBB reject demanded. Remaining D2 work: re-verify/retrain DNABERT-2 DAM under the SAME offset-aware collator (so both backbones share one method), then Nucleotide Transformer as the third backbone.
+
+## P28 — DNABERT-2 Re-Verified Under the Offset-Aware Collator: Original Result Was Not a First-Base Artifact (D2 closes the home backbone)
+
+**Phase:** Depth study D2, "one method across backbones". Closes the item left open in P27: the paper's DNABERT-2 DAM used the OLD first-base collator (P25). To claim one principled method on every backbone, DNABERT-2 must be re-trained with the SAME `OffsetAwareDamageCollator` used on GENA-LM, and still beat MLM.
+
+**Setup:** DNABERT-2 (`zhihan1996/DNABERT-2-117M`) fine-tuned with collator `dam_offset` (linear, scale_to 0.15, power 1.0), seeds 42/1/2, 20 epochs, Drive-free Colab. MLM arm reused from the existing `multiseed_models/mlm-baseline-s*` (collator-invariant — only the DAM arm changes). Models → `training/multiseed_models/dam-offset-s{42,1,2}/` (`pytorch_model.bin`, byte-verified 468345303). Training eval_loss 3.83 / 3.71 / 3.82. Eval `evaluation/evaluate_dnabert_offset_multiseed.py` → `evaluation/results_dnabert_offset_multiseed.json` (same 626-window pooled stats as GENA-LM: seed-averaged per-window Δ, one-sample t + Wilcoxon + 10k-bootstrap CI). DNABERT-2 DOES support `offset_mapping`, so the eval ports directly.
+
+**Result (DAM-offset − MLM, pooled over seeds 42/1/2):**
+- **TERMINAL** (damaged ends): 3 nt **+0.067** (p=4.9e-12, CI [+0.049,+0.086], n=486); 5 nt **+0.045** (p=9.1e-10, [+0.031,+0.059], n=565); 10 nt **+0.034** (p=1.9e-13, [+0.026,+0.044], n=619). Every seed positive (3 nt: +0.075/+0.061/+0.066).
+- **BACKGROUND** (central band): 3 nt **+0.029** (p=7.6e-7); 5 nt **+0.026** (p=9.7e-8); 10 nt **+0.021** (p=8.2e-11). All positive, all seeds same sign. No collapse.
+
+**Reading:** under the nucleotide-principled collator (not the first-base proxy), DNABERT-2 DAM still beats MLM at the terminal on every seed, with the correct damage gradient (edge largest at 3 nt, decaying inward) and NO background cost. So the original DNABERT-2 result (P25's first-base collator) was NOT an artifact of that proxy — it survives the principled method. Both backbones now share ONE collator and show the SAME pattern (terminal win + positive-small background = balanced reconstructor). D2 architecture independence is demonstrated on two backbones from different labs with different tokenizers.
+
+**Honest nuance (carry into the Phase-4 rigor pass):** offset-aware DAM's terminal edge on DNABERT-2 (+0.067 @ 3 nt) is SMALLER than the first-base DAM's (+0.103 @ 3 nt, the Phase-0 `evaluate_scaling_multiseed` number), but it gains a clear background improvement the first-base version did not have (+0.029 vs ~0). This is the same soft-vs-hard tradeoff seen with pmd-mask (P24), now internal to DAM: the first-base proxy happened to concentrate masking harder at C/G-first tokens near the ends; the offset-aware version spreads over all C/G globally, so it is more balanced and slightly less terminal-peaked. Both beat MLM with overwhelming significance. For the unified cross-backbone table, STANDARDIZE on the offset-aware model set — it is the one method shared across DNABERT-2 + GENA-LM (+ NT to come), and it resolves the 38.6% vs 36.3% checkpoint mismatch by picking a single self-consistent set.
+
+**Cross-backbone consistency (both under the identical offset-aware collator, pooled Δ):**
+| | terminal 3 nt | terminal 10 nt | background 3 nt |
+|---|---|---|---|
+| DNABERT-2 | +0.067 | +0.034 | +0.029 |
+| GENA-LM | +0.110 | +0.048 | +0.015 |
+
+Same sign, same gradient, same balanced-reconstructor shape on two independent backbones. (Absolute magnitudes are not comparable across backbones — different tokenizers / vocab / pretraining — only the pattern is.)
+
+**Decision / next:** D2 is now two backbones strong. Proceed to the third backbone (Nucleotide Transformer): the `OffsetAwareDamageCollator` ports unchanged (it reconstructs positions from vocab token strings via cumsum of token lengths — no `offset_mapping` needed at train time), and `build_dataset.py` is already backbone-parametrized (`VESTIGE_MODEL`/`VESTIGE_OUT`). Only NT-specific work = an eval that rebuilds offsets from NT's 6-mer token strings (NT's slow tokenizer likely lacks `offset_mapping`).
+
+## P29 — Nucleotide Transformer Confirms DAM on a THIRD Backbone: D2 Architecture Independence Is Overwhelming
+
+**Phase:** Depth study D2, third backbone. DNABERT-2 (BPE, MosaicBERT) and GENA-LM (BPE, pre-LN BERT) are both Transformer-encoder BERT variants with byte-pair vocabularies. NT is a genuinely different design — InstaDeep, ESM-style architecture with rotary embeddings, and a NON-OVERLAPPING 6-MER tokenizer (not BPE) — so it stresses the method on a vocabulary where every token is a fixed 6 nt.
+
+**Setup:** `InstaDeepAI/nucleotide-transformer-v2-50m-multi-species`, fine-tuned 3 MLM + 3 DAM (seeds 42/1/2), 20 epochs, Drive-free Colab. NT has NO reusable MLM arm (unlike DNABERT-2, where the paper's `mlm-baseline-s*` was reused), so all 6 arms trained fresh. Loads cleanly via `AutoModelForMaskedLM` → `EsmForMaskedLM`, missing_keys=0 (NO `model_class` override — P26 trap checked and absent); base masked-LM loss on real DNA 0.036 vs random 8.32. Dataset `training/dataset_nt` (275/69, same windows as the other backbones). Models `training/multiseed_models/{mlm-nt,dam-offset-nt}-s{42,1,2}/`, training eval_loss MLM 5.31/5.24/5.25 ≈ DAM 5.29/5.26/5.25 (equal overall fit). Eval `evaluation/evaluate_nt_multiseed.py` → `results_nt_multiseed.json`. NT's slow tokenizer has no `offset_mapping`, so offsets are rebuilt by cumsum over per-token nucleotide-string lengths — EXACT here because all 626 windows are pure uppercase ACGT (no `<unk>` desync; a coverage guard asserts the reconstructed spans reach len(dna)). This is the SAME position model the `OffsetAwareDamageCollator` uses at train time, so eval and training agree by construction.
+
+**Result (DAM-offset − MLM, pooled over seeds 42/1/2):**
+- **TERMINAL**: 3 nt **+0.233** (p=1.1e-44, CI [+0.204,+0.263], n=486); 5 nt **+0.173** (p=1.5e-44, [+0.151,+0.196], n=565); 10 nt **+0.112** (p=3.2e-52, [+0.099,+0.126], n=619). Every seed positive and tight (3 nt: +0.218/+0.248/+0.234).
+- **BACKGROUND**: 3 nt **+0.018** (p=6.5e-4); 5 nt **+0.035** (p=1.1e-13); 10 nt **+0.050** (p=1.7e-37). All positive, all seeds same sign. No collapse.
+
+**Reading:** DAM beats MLM at the terminal on NT too, with overwhelming significance and the correct damage gradient (largest at 3 nt, decaying inward). NT's terminal edge (+0.23 @ 3 nt) is the LARGEST of the three backbones — plausibly because a terminal base sits inside a fixed 6-mer token, so uniform MLM almost never targets it specifically while DAM concentrates masking on exactly those damage-relevant tokens, giving a larger relative gain. Background is positive everywhere (no collapse); note NT's background Δ INCREASES with band width (0.018 → 0.050) rather than decreasing — the interior DAM advantage widens — but it never goes negative, so the balanced-reconstructor claim holds. Absolute magnitudes are NOT comparable across backbones (different tokenizers/vocab/pretraining); only the PATTERN is, and all three backbones show the identical pattern.
+
+**Three-backbone cross-consistency (all under the identical offset-aware collator, pooled Δ):**
+| Backbone (lab / tokenizer / arch) | terminal 3 nt | terminal 10 nt | background 3 nt |
+|---|---|---|---|
+| DNABERT-2 (Zhihan / BPE / MosaicBERT) | +0.067 | +0.034 | +0.029 |
+| GENA-LM (AIRI / BPE / pre-LN BERT) | +0.110 | +0.048 | +0.015 |
+| NT (InstaDeep / 6-mer / ESM-style) | +0.233 | +0.112 | +0.018 |
+
+Three labs, three tokenizers, three architectures (including a non-BPE k-mer vocabulary), every seed same sign, same damage gradient, same no-collapse background. This is decisive architecture-independence evidence — DAM is a general principle, not a DNABERT-2/BPE/aDNA artifact.
+
+**Decision / next:** D2 (architecture independence) is COMPLETE on three backbones — Phase 1 done. Remaining depth-study work is all DNABERT-2 (no new backbone, fast runs, MLM reused): Phase 2 D3 (synthetic corruption-shape sweep + FFPE = domain independence), Phase 3 pmd-mask tradeoff curve, Phase 4 rigor pass + manuscript. The unified cross-backbone table above is the Phase-4 headline; standardize all DNABERT-2 numbers on the offset-aware set.
+
+## P30 — Run 2 (D3 Synthetic + pmd-mask Tradeoff): Corruption-Shape Independence CONFIRMED; the Power Knob Is INERT and P24's "pmd Collapse" Does NOT Reproduce
+
+**Phase:** Depth study Phase 2 (D3 synthetic corruption-shape sweep) + Phase 3 (pmd-mask tradeoff curve). All DNABERT-2; MLM / dam-offset (power 1) / pmd-mask arms reused from the offset-aware multiseed set (P28). 12 new arms trained headless on a Kaggle GPU (6 synthetic + 6 tradeoff power 2/4), seeds 42/1/2, 20 epochs. (Infra for reproducibility: Kaggle's Python-3.13 triton is newer than DNABERT-2's bundled flash-attention kernels (`tl.dot(..., trans_b=True)` removed), so `train.py` now makes triton look absent via `sys.modules["triton"] = None` → DNABERT-2 takes its torch-attention fallback, the same path as Apple MPS. The kernel also harvests each arm's `pytorch_model.bin` and deletes its optimizer-state checkpoints per arm, or `/kaggle/working` fills at ~arm 10.)
+
+### D3 synthetic corruption-shape sweep — STRONG WIN
+Setup: `PositionProfileCollator` masks C/G by an arbitrary per-absolute-position weight w[p] (not distance-from-end). Two deliberately UN-terminal shapes: `central` (Gaussian bump mid-window, σ=L/12 — interior is the damaged zone, ends clean) and `periodic` (sin², 50 bp — no notion of end at all). DAM-matched arm (`syn-<profile>-s*`) vs reused uniform MLM (`mlm-baseline-s*`). Corruption zone = w[p] ≥ 0.5·max(w); score C/G recovery there. Eval `evaluation/evaluate_synthetic_multiseed.py` → `results_synthetic_multiseed.json`, same pooled stats as the backbone evals.
+Result (DAM-matched − MLM, pooled seeds 42/1/2):
+- **central** (zone n=392): per-seed +0.029 / +0.062 / +0.041, pooled **+0.0437**, p=5.1e-45, CI [+0.038, +0.049].
+- **periodic** (zone n=1000): per-seed +0.023 / +0.024 / +0.027, pooled **+0.0248**, p=4.1e-105, CI [+0.023, +0.027].
+Reading: DAM matched to an arbitrary, un-terminal corruption shape beats uniform MLM at recovering that shape's damaged positions — every seed, both shapes, CIs clear of zero. "Match training masking to the corruption distribution" is CORRUPTION-SHAPE-AGNOSTIC, not an ends-are-special artifact. This is the domain / corruption-shape independence axis to pair with three-backbone architecture independence (P29).
+
+### Tradeoff curve — the power knob is INERT, and P24's pmd background-collapse does NOT reproduce
+Setup: offset-aware DAM on the REAL aDNA profile at power 1 (= `dam-offset`, reused) / 2 / 4, vs reused MLM and pmd-mask. Terminal + background (mid-window) C/G recovery at w=3/5/10. Eval `evaluation/evaluate_tradeoff_multiseed.py` → `results_tradeoff_multiseed.json`.
+Result (pooled seeds, recovery at w = 3 / 5 / 10):
+| arm | t@3 | t@5 | t@10 | bg@3 | bg@5 | bg@10 |
+|---|---|---|---|---|---|---|
+| mlm | 0.206 | 0.243 | 0.265 | 0.372 | 0.342 | 0.319 |
+| p1 (dam-offset) | 0.273 | 0.287 | 0.300 | 0.401 | 0.368 | 0.340 |
+| p2 | 0.267 | 0.291 | 0.304 | 0.388 | 0.359 | 0.332 |
+| p4 | 0.269 | 0.294 | 0.309 | 0.388 | 0.360 | 0.332 |
+| pmd | 0.514 | 0.496 | 0.474 | 0.390 | 0.364 | 0.348 |
+
+Two honest, UNEXPECTED findings:
+1. **The power knob is inert.** p1 ≈ p2 ≈ p4 on BOTH axes — raising power 1→2→4 barely moves terminal (0.273→0.267→0.269 @3) or background. There is NO soft→hard continuum; the three DAM variants sit on one operating point. **Mechanism (verified, `scratchpad/diag_power.py`):** power DOES sharpen the per-token extreme-terminal mask-prob (mean at 0–2 nt: 0.22 → 0.37 → 0.50 for power 1/2/4, max → 1.0), BUT deamination-susceptible terminal tokens are only ~113 of ~16,000 tokens (<1%), so even power 4 puts just 3.7% of the 15% budget within 10 nt of a terminus (power 1 = 1.8%). DAM always spreads its budget across the WHOLE sequence, so >96% of the training signal is interior reconstruction regardless of power, and the models converge. pmd-mask is a DIFFERENT regime — terminal-only masking, ~100% of a smaller budget at the ends → terminal 0.514. The concentration knob cannot bridge soft-DAM to pmd-mask because the terminus is a negligible fraction of positions. Structural, not a bug.
+2. **P24 REVISED: pmd-mask does NOT collapse on background under the offset-aware multiseed protocol.** pmd bg = 0.390 / 0.364 / 0.348 is ≈ or BETTER than DAM (0.401 / 0.368 / 0.340) at wider windows, while pmd terminal (0.514) dwarfs DAM (0.273). The earlier P24 "pmd beats terminal but COLLAPSES on bg → DAM is the balanced champion" was an artifact of the first-base eval and does NOT survive the rigorous protocol. Caveat: the background metric is weakly discriminating (all arms 0.37–0.40 vs terminal spanning 0.21–0.51), so "no collapse" partly reflects that interior C/G reconstruction is an easy, masking-strategy-insensitive task.
+(DAM still beats MLM on both axes — p1 Δterm +0.067 / Δbg +0.029 @3 — so the DAM>MLM result is untouched; only the DAM-vs-pmd comparison changed.)
+
+### Decision (framing, user 2026-11-08): pmd-mask = REFERENCE POINT, not rival
+DAM's contribution rests on **DAM > MLM** — architecture independence (P28/P29, three backbones) + corruption-shape independence (D3 above) — NOT on beating pmd-mask. In the paper, pmd-mask is a domain-specific terminal-only reference that specializes on the terminal at the cost of generality (it is BUILT from the known aDNA damage profile and masks only the ends; it does not transfer to other corruption shapes — the D3 synthetic sweep is exactly the setting it cannot address). DROP every "pmd-mask collapses on background" claim (retires the P24 talking point). The tradeoff-curve experiment is NOT a paper figure as a continuum; if referenced at all, report it honestly as "soft-DAM and pmd-mask are distinct masking regimes a concentration knob cannot interpolate, because susceptible termini are <1% of positions." **All GPU work for the depth study is now COMPLETE.** Remaining = Phase 4 rigor pass + manuscript (no GPU).
