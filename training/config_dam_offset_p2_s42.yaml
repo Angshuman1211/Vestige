@@ -1,0 +1,32 @@
+run_name: dam-offset-p2-s42
+collator: dam_offset
+
+model_name: zhihan1996/DNABERT-2-117M
+dataset_path: training/dataset
+output_dir: training/checkpoints/dam-offset-p2-s42
+
+# Phase 3 tradeoff curve: the SAME offset-aware DAM on the REAL aDNA profile, with the
+# concentration knob (power) turned up. power 1 = dam-offset (exists); 2/4 concentrate
+# masking harder onto the highest-damage terminal tokens, toward pmd-mask's hard limit.
+num_train_epochs: 20
+per_device_train_batch_size: 8
+per_device_eval_batch_size: 8
+learning_rate: 2.0e-5
+warmup_ratio: 0.1
+weight_decay: 0.01
+lr_scheduler_type: cosine
+
+eval_strategy: epoch
+save_strategy: epoch
+save_total_limit: 1
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+
+scale_to: 0.15
+power: 2.0
+smooth: 0
+
+seed: 42
+dataloader_num_workers: 0
+logging_steps: 10
+report_to: none

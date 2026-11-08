@@ -1,0 +1,29 @@
+run_name: mlm-nt-s42
+collator: mlm
+
+model_name: InstaDeepAI/nucleotide-transformer-v2-50m-multi-species
+dataset_path: training/dataset_nt
+output_dir: training/checkpoints/mlm-nt-s42
+
+# D2 third backbone (Nucleotide Transformer v2 50M, InstaDeep; ESM-style MLM,
+# non-overlapping 6-mer tokenizer). NT loads cleanly via AutoModelForMaskedLM
+# (missing_keys=0, LM head intact) so NO model_class override is needed.
+# Same hyperparameters as the DNABERT-2 and GENA-LM runs.
+num_train_epochs: 20
+per_device_train_batch_size: 8
+per_device_eval_batch_size: 8
+learning_rate: 2.0e-5
+warmup_ratio: 0.1
+weight_decay: 0.01
+lr_scheduler_type: cosine
+
+eval_strategy: epoch
+save_strategy: epoch
+save_total_limit: 1
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+
+seed: 42
+dataloader_num_workers: 0
+logging_steps: 10
+report_to: none

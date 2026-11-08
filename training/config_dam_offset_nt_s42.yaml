@@ -1,0 +1,34 @@
+run_name: dam-offset-nt-s42
+collator: dam_offset
+
+model_name: InstaDeepAI/nucleotide-transformer-v2-50m-multi-species
+dataset_path: training/dataset_nt
+output_dir: training/checkpoints/dam-offset-nt-s42
+
+# D2 "one method across backbones": the SAME OffsetAwareDamageCollator used on
+# DNABERT-2 and GENA-LM. It ports to NT unchanged: NT 6-mer tokens ARE their
+# nucleotide content and are contiguous/non-overlapping, so the collator's
+# cumsum-of-token-lengths gives exact absolute positions (verified empirically).
+num_train_epochs: 20
+per_device_train_batch_size: 8
+per_device_eval_batch_size: 8
+learning_rate: 2.0e-5
+warmup_ratio: 0.1
+weight_decay: 0.01
+lr_scheduler_type: cosine
+
+eval_strategy: epoch
+save_strategy: epoch
+save_total_limit: 1
+load_best_model_at_end: true
+metric_for_best_model: eval_loss
+
+# offset-aware DAM: linear mapping, 0.15 rescale (same knobs as the other backbones)
+scale_to: 0.15
+power: 1.0
+smooth: 0
+
+seed: 42
+dataloader_num_workers: 0
+logging_steps: 10
+report_to: none

@@ -34,6 +34,17 @@ import yaml
 import importlib.util, importlib.machinery
 # triton stub removed: it broke transformers 4.57 import; DNABERT-2 falls back to torch attention.
 
+# Modern CUDA images (Kaggle's Python 3.13, Colab's newer runtimes) ship a triton newer
+# than DNABERT-2's bundled flash-attention kernels, which call tl.dot(..., trans_b=True) —
+# an argument current triton removed. triton still IMPORTS, so DNABERT-2 takes its triton
+# path and then fails to COMPILE the kernel at runtime. Make triton look ABSENT so DNABERT-2
+# falls back to torch attention — the same path taken on Apple MPS, where triton is simply
+# not installed. Poisoning sys.modules (not a meta-path finder that raises) is deliberate:
+# `import triton` then raises ImportError (DNABERT-2 catches it and falls back), while
+# transformers' own `importlib.util.find_spec("triton")` probe returns None cleanly instead
+# of crashing the transformers import. No effect on machines that never had triton.
+sys.modules["triton"] = None
+
 import torch
 from datasets import load_from_disk
 from transformers import (
@@ -99,6 +110,16 @@ def build_collator(cfg: dict, tokenizer):
             scale_to=cfg.get("scale_to", 0.15),
             power=cfg.get("power", 1.0),
             smooth=cfg.get("smooth", 0),
+        )
+    elif name == "position":
+        # Arbitrary-shape corruption (D3 synthetic sweep): mask C/G by a per-absolute
+        # -position weight profile, not by distance-from-terminus. profile_path selects
+        # the shape (central / periodic / ...).
+        from masking.collator_position import PositionProfileCollator
+        return PositionProfileCollator(
+            tokenizer=tokenizer,
+            profile_path=cfg["profile_path"],
+            scale_to=cfg.get("scale_to", 0.15),
         )
     elif name == "span":
         return SpanMaskingCollator(tokenizer=tokenizer, mlm_probability=0.15)
